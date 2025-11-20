@@ -1,0 +1,2087 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abusing Chrome Remote Debugging - BugCon 2025</title>
+    
+    <!-- Reveal.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/theme/black.css">
+    
+    <!-- Code syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/highlight/monokai.css">
+    
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --hacker-green: #00ff41;
+            --dark-bg: #0a0e14;
+            --code-bg: #1a1d23;
+        }
+        
+        .reveal {
+            background-color: var(--dark-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 32px;
+        }
+        
+        .reveal h1, .reveal h2, .reveal h3 {
+            color: var(--hacker-green);
+            text-transform: none;
+            font-weight: 700;
+        }
+        
+        .reveal h1 {
+            font-size: 2.2em;
+            text-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+            margin-bottom: 20px;
+        }
+        
+        .reveal h2 {
+            font-size: 1.6em;
+            border-bottom: 2px solid var(--hacker-green);
+            padding-bottom: 8px;
+            margin-bottom: 25px;
+        }
+        
+        .reveal strong {
+            color: var(--hacker-green);
+            font-weight: 700;
+        }
+        
+        .reveal p {
+            margin: 12px 0;
+            line-height: 1.6;
+        }
+        
+        .reveal em {
+            color: #ff6b6b;
+            font-style: normal;
+        }
+        
+        .reveal code {
+            background-color: var(--code-bg);
+            padding: 2px 8px;
+            border-radius: 3px;
+            color: var(--hacker-green);
+            font-family: 'Courier New', monospace;
+        }
+        
+        .reveal pre {
+            width: 100%;
+            background-color: var(--code-bg);
+            border: 1px solid var(--hacker-green);
+            border-radius: 5px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+        }
+        
+        .reveal pre code {
+            background-color: transparent;
+            padding: 15px;
+            max-height: 500px;
+            font-size: 0.75em;
+            line-height: 1.4;
+        }
+        
+        .reveal pre {
+            margin: 15px 0;
+        }
+        
+        .reveal ul, .reveal ol {
+            text-align: left;
+        }
+        
+        .reveal li {
+            margin: 12px 0;
+            font-size: 0.9em;
+        }
+        
+        .reveal section {
+            overflow: visible !important;
+        }
+        
+        .reveal .slides section {
+            padding: 20px;
+        }
+        
+        .reveal .fragment {
+            margin-top: 15px;
+        }
+        
+        .reveal section > div {
+            margin: 12px 0;
+        }
+        
+        .reveal h2 + div,
+        .reveal h2 + p,
+        .reveal h3 + div,
+        .reveal h3 + p {
+            margin-top: 20px;
+        }
+        
+        .reveal .two-column {
+            font-size: 0.85em;
+            gap: 50px;
+        }
+        
+        .reveal .two-column > div {
+            padding: 0 10px;
+        }
+        
+        .reveal .two-column pre code {
+            font-size: 0.65em;
+            line-height: 1.4;
+            padding: 10px !important;
+        }
+        
+        .reveal .two-column h3 {
+            margin-bottom: 15px;
+        }
+        
+        .reveal .two-column p {
+            margin-top: 10px;
+            line-height: 1.5;
+        }
+        
+        .reveal .red-team {
+            color: #ff4444;
+            font-weight: bold;
+        }
+        
+        .reveal .blue-team {
+            color: #4444ff;
+            font-weight: bold;
+        }
+        
+        .reveal .critical {
+            color: #ff0000;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .reveal .terminal {
+            background-color: #000;
+            border: 2px solid var(--hacker-green);
+            border-radius: 5px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            color: var(--hacker-green);
+            text-align: left;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+        }
+        
+        .reveal .terminal::before {
+            content: "$ ";
+            color: var(--hacker-green);
+        }
+        
+        .reveal .impact-stat {
+            font-size: 3em;
+            color: var(--hacker-green);
+            font-weight: bold;
+            text-shadow: 0 0 30px rgba(0, 255, 65, 0.7);
+            margin: 20px 0;
+        }
+        
+        .reveal .warning-box {
+            background-color: rgba(255, 68, 68, 0.1);
+            border-left: 5px solid #ff4444;
+            padding: 15px 20px;
+            margin: 15px 0;
+            line-height: 1.5;
+        }
+        
+        .reveal .warning-box strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .reveal .success-box {
+            background-color: rgba(0, 255, 65, 0.1);
+            border-left: 5px solid var(--hacker-green);
+            padding: 15px 20px;
+            margin: 15px 0;
+            line-height: 1.5;
+        }
+        
+        .reveal .success-box strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .reveal ul {
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .reveal li {
+            margin: 10px 0;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        
+        .reveal ul ul {
+            margin-top: 8px;
+        }
+        
+        .reveal .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+        
+        .reveal .fragment.highlight-current-red.visible.current-fragment {
+            color: #ff4444;
+        }
+        
+        .reveal .fragment.highlight-current-green.visible.current-fragment {
+            color: var(--hacker-green);
+        }
+        
+        .reveal .red-team-section {
+            background: linear-gradient(135deg, rgba(255, 0, 0, 0.1), transparent);
+        }
+        
+        .reveal .blue-team-section {
+            background: linear-gradient(135deg, rgba(0, 100, 255, 0.1), transparent);
+        }
+        
+        .reveal .dense-slide {
+            font-size: 0.8em !important;
+        }
+        
+        .reveal .dense-slide h2 {
+            font-size: 1.4em !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .reveal .dense-slide h3 {
+            font-size: 1.1em !important;
+            margin-bottom: 10px !important;
+        }
+        
+        .reveal .dense-slide .impact-stat {
+            font-size: 2.2em !important;
+            margin: 15px 0 !important;
+        }
+        
+        .reveal .dense-slide .two-column {
+            font-size: 0.75em !important;
+            gap: 30px !important;
+        }
+        
+        .reveal .dense-slide li {
+            margin: 8px 0 !important;
+            font-size: 0.85em !important;
+        }
+        
+        .reveal .dense-slide .warning-box,
+        .reveal .dense-slide .critical,
+        .reveal .dense-slide .success-box {
+            padding: 10px 15px !important;
+            margin: 10px 0 !important;
+            font-size: 0.85em !important;
+            line-height: 1.3 !important;
+        }
+        
+        .reveal .dense-slide p {
+            margin: 8px 0 !important;
+            line-height: 1.4 !important;
+        }
+        
+        .reveal .dense-slide ul,
+        .reveal .dense-slide ol {
+            margin-top: 10px !important;
+            margin-bottom: 10px !important;
+        }
+        
+        .reveal .dense-slide code {
+            font-size: 0.75em !important;
+        }
+        
+        .reveal .dense-slide pre code {
+            font-size: 0.65em !important;
+            line-height: 1.3 !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="reveal">
+        <div class="slides">
+            
+            <!-- TITLE SLIDE -->
+            <section data-markdown>
+                <textarea data-template>
+                    # Abusing Chrome Remote Debugging
+                    ## A Hands-On Guide for Attackers and Defenders
+                    
+                    **BugCon 2025**
+                    
+                    **Benigno Gutiérrez**
+                    
+                    [github.com/benibits](https://github.com/benibits)
+                </textarea>
+            </section>
+
+            <!-- OPENING HOOK - PROVOCATIVE QUESTION -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## Quick Poll: Raise Your Hand
+                    
+                    <div class="fragment" style="font-size: 1.3em; margin: 40px 0;">
+                    ✋ **Who has Chrome or Edge installed?**
+                    </div>
+                    
+                    <div class="fragment" style="font-size: 1.3em; margin: 40px 0;">
+                    ✋ **Who runs browser automation tests?**<br>
+                    <span style="font-size: 0.7em; opacity: 0.8;">(Selenium, Puppeteer, Playwright)</span>
+                    </div>
+                    
+                    <div class="fragment" style="font-size: 1.3em; margin: 40px 0;">
+                    ✋ **Who monitors TCP port 9222?**
+                    </div>
+                    
+                    <div class="fragment critical" style="font-size: 1.5em; margin-top: 60px;">
+                    That last one is the problem.
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 3: CAT INJECTION LIVE DEMO - THE HOOK! -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## Live Demo: The Cat Injection
+                    
+                    <div style="font-size: 1.2em; margin: 40px 0;">
+                    Let me show you something interesting...
+                    </div>
+                    
+                    <div class="terminal fragment">
+                    $ python inject_cat_opening.py
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 40px; font-size: 1.1em;">
+                    **Wait for it 🐱**
+                    </div>
+                    
+                    <div class="warning-box fragment" style="margin-top: 40px;">
+                    That just happened via Chrome DevTools Protocol.<br>
+                    Let me explain...
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 4: TRANSITION - "THAT HAPPENED BECAUSE..." -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## That Happened Because of THIS
+                    
+                    <div style="font-size: 1.4em; margin: 40px 0; color: var(--hacker-green);">
+                    **Chrome DevTools Protocol (CDP)**
+                    </div>
+                    
+                    <div style="font-size: 1.1em; margin: 30px 0;">
+                    A powerful debugging interface that just:
+                    </div>
+                    
+                    <div class="fragment" style="margin: 25px 0;">
+                    ✓ Connected to your browser remotely
+                    </div>
+                    
+                    <div class="fragment" style="margin: 25px 0;">
+                    ✓ Executed JavaScript without your permission
+                    </div>
+                    
+                    <div class="fragment" style="margin: 25px 0;">
+                    ✓ Injected content into a tab you had open
+                    </div>
+                    
+                    <div class="fragment critical" style="font-size: 1.3em; margin-top: 50px;">
+                    And it required ZERO authentication.
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- PHASE 2: UNDERSTAND THE ATTACK VECTOR -->
+            
+            <!-- SLIDE 5: WHAT IS CHROME DEVTOOLS PROTOCOL? (NEW) -->
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## What is Chrome DevTools Protocol?
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **The Basics:**
+                    - Debugging interface for Chromium
+                    - WebSocket-based, JSON protocol
+                    - Binds to `localhost:9222`
+                    - Used by developers worldwide
+                    
+                    **Legitimate Uses:**
+                    - Browser automation (Puppeteer, Selenium)
+                    - Performance testing & profiling
+                    - Development debugging
+                    - Screenshot services
+                    - Web scraping
+                    
+                    </div>
+                    <div>
+                    
+                    **The Architecture:**
+                    ```bash
+                    # Start Chrome with debugging
+                    chrome.exe --remote-debugging-port=9222
+                    
+                    # Access via HTTP
+                    http://localhost:9222/json
+                    
+                    # Connect via WebSocket
+                    ws://localhost:9222/devtools/...
+                    ```
+                    
+                    <div class="fragment" style="margin-top: 20px;">
+                    
+                    **The Problem:**
+                    - ❌ No passwords
+                    - ❌ No API keys
+                    - ❌ No certificates
+                    - ❌ No authentication at all
+                    
+                    </div>
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="success-box fragment">
+                    This is a powerful, **intentionally designed** tool. And it has **zero authentication by design**.
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 6: WHY CDP EXISTS & THE SECURITY MODEL (NEW) -->
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## Why CDP Exists & The Security Model
+                    
+                    **Why Google Created This:**
+                    - Developers need to debug browsers in production
+                    - Automation tools need programmatic control
+                    - Testing frameworks require deep browser access
+                    - Performance profiling needs internal metrics
+                    
+                    <div class="fragment" style="margin-top: 30px;">
+                    
+                    **The Design Choice:**
+                    
+                    <div class="two-column" style="margin-top: 20px;">
+                    <div>
+                    
+                    **Convenience:**
+                    - Zero-config setup
+                    - No auth tokens to manage
+                    - Works immediately
+                    - Developer-friendly
+                    
+                    </div>
+                    <div>
+                    
+                    **Security Assumption:**
+                    - "localhost = trusted"
+                    - OS-level protection
+                    - Physical access implied
+                    - Developer awareness
+                    
+                    </div>
+                    </div>
+                    
+                    </div>
+                    
+                    <div class="warning-box fragment" style="margin-top: 30px;">
+                    **The assumption breaks when:**<br>
+                    • Malware runs on the same machine (local access)<br>
+                    • Developer workstations are compromised<br>
+                    • Docker containers expose ports to networks<br>
+                    • Port forwarding/SSH tunnels are used<br>
+                    • CI/CD pipelines misconfigure Chrome
+                    </div>
+                    
+                    <p class="fragment" style="margin-top: 20px; font-size: 0.95em;">This isn't a vulnerability. It's an **intentional design decision** that prioritizes developer convenience over security.</p>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 7: THE ATTACK SURFACE - WHAT CAN BE STOLEN (NEW) -->
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## The Attack Surface
+                    ### What Can Be Stolen via CDP?
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **Session & Identity:**
+                    - 🍪 **All cookies** (including HttpOnly)
+                    - 🔐 **Session tokens** (bypass 2FA)
+                    - 🎫 **CSRF tokens**
+                    - 💾 **localStorage** (JWT tokens, API keys)
+                    - 💾 **sessionStorage** (temporary credentials)
+                    - 🗄️ **IndexedDB** (encrypted storage)
+                    
+                    </div>
+                    <div>
+                    
+                    **Surveillance & Control:**
+                    - 📸 **Screenshots** (real-time)
+                    - 👁️ **Visual surveillance** (what user sees)
+                    - 📜 **Browser history**
+                    - 🌐 **DOM access** (full page content)
+                    - ⚙️ **JavaScript execution** (arbitrary code)
+                    - 🔌 **WebSocket interception**
+                    - 🕵️ **Real-time monitoring**
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 30px;">
+                    
+                    **Advanced Capabilities:**
+                    - Access to `chrome://settings` pages → **saved passwords**
+                    - Payment methods and autofill data
+                    - Network request/response interception
+                    - Geolocation and permissions
+                    
+                    </div>
+                    
+                    <div class="critical fragment" style="font-size: 1.3em; margin-top: 40px;">
+                    This is what attackers care about.<br>
+                    This is why CDP became the #1 infostealer target.
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 8: NOT JUST CHROME (MOVED FROM LATER) -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## Not Just Chrome
+                    
+                    **Every Chromium-based browser is affected:**
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 40px 0; text-align: center;">
+                    <div>
+                    <h3 style="color: #00ff41; font-size: 1.5em;">Chrome</h3>
+                    <p style="font-size: 0.8em;">3.83B users</p>
+                    </div>
+                    <div>
+                    <h3 style="color: #00ff41; font-size: 1.5em;">Edge</h3>
+                    <p style="font-size: 0.8em;">274M users</p>
+                    </div>
+                    <div>
+                    <h3 style="color: #00ff41; font-size: 1.5em;">Brave</h3>
+                    <p style="font-size: 0.8em;">Growing market</p>
+                    </div>
+                    <div>
+                    <h3 style="color: #00ff41; font-size: 1.5em;">Opera</h3>
+                    <p style="font-size: 0.8em;">Chromium-based</p>
+                    </div>
+                    <div>
+                    <h3 style="color: #00ff41; font-size: 1.5em;">Vivaldi</h3>
+                    <p style="font-size: 0.8em;">Power users</p>
+                    </div>
+                    <div>
+                    <h3 style="color: #00ff41; font-size: 1.5em;">...more</h3>
+                    <p style="font-size: 0.8em;">All Chromium forks</p>
+                    </div>
+                    </div>
+                    
+                    <div class="success-box">
+                    Same Chromium foundation = Same debugging protocol = Same <strike>vulnerability</strike> feature
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 25px; font-size: 0.95em;">
+                    Switch from Chrome to Edge thinking you're safer? Think again. It's the **Chromium core** that matters.
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- PHASE 3: THE THREAT LANDSCAPE -->
+            
+            <!-- SLIDE 9: INFOSTEALERS DISCOVERED CDP (REFRAMED) -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## Infostealers Discovered CDP
+                    ### The Underground Economy Adapted Fast
+                    
+                    <div style="font-size: 1.1em; margin: 30px 0;">
+                    **Once attackers learned about CDP's zero-auth design...**
+                    </div>
+                    
+                    <div class="fragment" style="margin: 25px 0;">
+                    **9 major malware families** now exploit Chrome debugging
+                    </div>
+                    
+                    <div class="two-column fragment">
+                    <div>
+                    
+                    **Active Families:**
+                    - **LUMMA** (51% market share)
+                    - **STEALC** (Tier 1 sophistication)
+                    - **VIDAR** (ChromeKatz implementation)
+                    - **PHEMEDRONE** (first public bypass)
+                    - **METASTEALER** (COM exploitation)
+                    
+                    </div>
+                    <div>
+                    
+                    **Historical/Emerging:**
+                    - **REDLINE** (disrupted Oct 2024)
+                    - **XENOSTEALER** (hybrid approach)
+                    - **MYTH STEALER** (Rust-based, new)
+                    - **FLESHSTEALER** (crypto-focused)
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box fragment" style="margin-top: 30px;">
+                    This isn't one rogue attacker. This is an organized criminal ecosystem with:<br>
+                    • **Subscription pricing** ($250-1,000/month)<br>
+                    • **Customer support** (Telegram channels)<br>
+                    • **Weekly updates** (just like legitimate SaaS)<br>
+                    • **Professional documentation** (Gitbook, tutorials)
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 10: HOW INFOSTEALERS ACTUALLY USE CDP -->
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## How Infostealers Actually Use CDP
+                    
+                    **The Attack Chain:**
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **Step 1: Spawn Hidden Chrome**
+                    ```bash
+                    chrome.exe \
+                      --remote-debugging-port=9222 \
+                      --window-position=-2400,-2400 \
+                      --user-data-dir="Default"
+                    ```
+                    <p style="font-size: 0.8em; margin-top: 10px;">Off-screen = invisible to victim</p>
+                    
+                    </div>
+                    <div>
+                    
+                    **Step 2: WebSocket Extraction**
+                    ```javascript
+                    // Connect via WebSocket
+                    ws://localhost:9222/devtools/...
+                    
+                    // Steal everything
+                    Network.getAllCookies()
+                    ```
+                    <p style="font-size: 0.8em; margin-top: 10px;">Cookies returned in plaintext </p>
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box fragment">
+                    <strong>Real Example - PHEMEDRONE Stealer (September 12, 2024):</strong><br>
+                    First public CDP bypass after Chrome 127 encryption (44 days). Spawns Chrome with exact command above using <code>--window-position=-2400,-2400</code> to keep it completely invisible (thousands of pixels off-screen). Connects via WebSocket to localhost:9222, uses deprecated CDP method <code>Network.getAllCookies</code>, returns all cookies unencrypted. Originally open-source on GitHub, now distributed via Telegram. Used by hundreds of attackers daily.
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 20px;">
+                    <strong>Why This Works:</strong>
+                    <ul style="font-size: 0.9em;">
+                    <li>No user interaction required - fully automated</li>
+                    <li>Bypasses App-Bound Encryption completely</li>
+                    <li>Silent - victim sees nothing (no window, no alerts)</li>
+                    <li>Works on all Chromium browsers (Chrome, Edge, Brave, etc.)</li>
+                    <li>Completed in under 5 seconds - fast exfiltration</li>
+                    </ul>
+                    </div>
+                    
+                    <div class="success-box fragment" style="margin-top: 15px; font-size: 0.85em;">
+                    <strong>Technical Timeline:</strong> Chrome 127 deployed encryption July 30, 2024 → PHEMEDRONE announced working bypass September 12, 2024 → Within 45 days of "fix", attackers had multiple working bypasses. This is the arms race.
+                    </div>
+                    
+                    <small style="opacity: 0.7; margin-top: 15px; display: block;">Source: Elastic Security Labs "Katz and Mouse Game" (Oct 2024)</small>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 11: THE 45-DAY ARMS RACE (MOVED HERE - STANDALONE) -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## The 45-Day Arms Race
+                    ### How Fast Attackers Adapted
+                    
+                    <div style="font-size: 0.9em; line-height: 2.5;">
+                    
+                    **July 30, 2024:** Chrome 127 deploys App-Bound Encryption
+                    
+                    <div class="fragment" style="margin: 20px 0;">
+                    ⬇️ **44 days later**
+                    </div>
+                    
+                    <div class="fragment">
+                    **September 12, 2024:** PHEMEDRONE announces first CDP bypass
+                    </div>
+                    
+                    <div class="fragment" style="margin: 20px 0;">
+                    **September 26-30, 2024:** METASTEALER + XENOSTEALER release methods
+                    </div>
+                    
+                    <div class="fragment">
+                    **Mid-October 2024:** LUMMA releases sophisticated pattern-based approach
+                    </div>
+                    
+                    <div class="fragment" style="margin: 20px 0;">
+                    **May 21, 2025:** LUMMA disrupted (2,300 domains, 394K infections)
+                    </div>
+                    
+                    <div class="fragment">
+                    **October 2025:** LUMMA resurfaces with new capabilities
+                    </div>
+                    
+                    </div>
+                    
+                    <div class="warning-box fragment" style="margin-top: 30px;">
+                    <strong>Google deployed encryption on July 30. Attackers had working bypasses on September 12.</strong><br>
+                    That's 44 days. That's the speed of the underground economy.
+                    </div>
+                    
+                    <small style="opacity: 0.7;">Sources: Elastic Security Labs, CISA AA25-141B, SpyCloud</small>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 12: LUMMA DOMINANCE (NEW STANDALONE SLIDE) -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## LUMMA Stealer: The Market Winner
+                    ### A Professional Criminal Operation
+                    
+                    <div class="impact-stat" style="font-size: 2.8em;">51%</div>
+                    
+                    <div style="font-size: 1.2em; margin: 20px 0;">
+                    Dark web market share (November 2024)
+                    </div>
+                    
+                    <div class="two-column" style="margin-top: 40px;">
+                    <div>
+                    
+                    **The Business Model:**
+                    - **400+** active paying customers
+                    - **$250-$1,000/month** pricing tiers
+                      - Experienced: $250/mo
+                      - Professional: $600/mo
+                      - Corporate: $1,000/mo
+                    - **Weekly updates** (like legitimate SaaS)
+                    - **Telegram support** (customer service!)
+                    - **GitBook documentation** (professional)
+                    
+                    </div>
+                    <div>
+                    
+                    **The Impact:**
+                    - **394,000** Windows infections (Q1 2025)
+                    - **2,300** domains seized (May 2025)
+                    - **CISA Advisory** (AA25-141B)
+                    - **Resurfaced** by October 2025
+                    
+                    <div class="critical fragment" style="margin-top: 25px;">
+                    Simple math:<br>
+                    400 customers × $250 = <strong>$100K+/month</strong>
+                    </div>
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box fragment" style="margin-top: 30px;">
+                    This isn't just malware. It's a **subscription service** with customer support, weekly updates, and professional operations. It's **organized crime** operating as Software-as-a-Service.
+                    </div>
+                    
+                    <small style="opacity: 0.7;">Sources: SpyCloud, CISA AA25-141B, ESET, Elastic Security Labs</small>
+                </textarea>
+            </section>
+
+            <!-- SLIDE 13: WHY THIS MATTERS (MOVED HERE FROM EARLY POSITION) -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## Why This Matters
+                    ### The Scale of the Threat
+                    
+                    <div class="two-column" style="margin-top: 30px;">
+                    <div>
+                    
+                    <div class="impact-stat" style="font-size: 2.2em;">4.5B</div>
+                    <p style="font-size: 0.9em;">Users in Chromium ecosystem globally</p>
+                    
+                    <div class="impact-stat" style="font-size: 2.2em; margin-top: 30px;">9.9M</div>
+                    <p style="font-size: 0.9em;">Total infostealer infections (2024)</p>
+                    
+                    </div>
+                    <div>
+                    
+                    <div class="impact-stat" style="font-size: 2.2em;">394K</div>
+                    <p style="font-size: 0.9em;">LUMMA infections in 60 days (Mar-May 2025)</p>
+                    
+                    <div class="impact-stat" style="font-size: 2.2em; margin-top: 30px;">< 5%</div>
+                    <p style="font-size: 0.9em;">Organizations actively monitoring this threat</p>
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="critical fragment" style="font-size: 1.4em; margin-top: 40px;">
+                    Billions of potential victims.<br>
+                    Millions already infected.<br>
+                    Almost nobody is watching.
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 30px; font-size: 0.95em;">
+                    **Additional Impact:**
+                    - **$2.2B** in cryptocurrency theft (browser-based attacks, 2024)
+                    - **Every** Chromium-based application affected (browsers, Electron apps)
+                    - **Organized crime** infrastructure (not lone hackers)
+                    </div>
+                    
+                    <small style="opacity: 0.7; margin-top: 20px; display: block;">Sources: FBI/CISA AA25-141B, SpyCloud, ESET, Chainalysis 2024</small>
+                </textarea>
+            </section>
+
+            <!-- CRYPTOCURRENCY LANDSCAPE (KEEP BUT POSITIONED AFTER THREAT LANDSCAPE) -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## Cryptocurrency Attack Landscape
+                    
+                    **2024 Browser-Based Threats:**
+                    
+                    - **$2.2B** total crypto theft across 303 incidents
+                    - **$494M** from wallet drainer attacks (332K victims)
+                    - **$305M** single breach (DMM Bitcoin - social engineering)
+                    
+                    <div class="warning-box">
+                    Browser exploitation enables these attacks - even without specific CDP attribution
+                    </div>
+                    
+                    <p class="fragment">**Key insight:** No major incidents <em>specifically</em> attributed to CDP in public reports - but browser debugging provides the access attackers need</p>
+                    
+                    <small style="opacity: 0.7;">Sources: Chainalysis, SlowMist, TRM Labs</small>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## The Mysterious Detection Gap
+                    
+                    **We searched for exposed debugging ports...**
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **Sources checked:**
+                    - ✗ Shodan - No statistics
+                    - ✗ Censys - No data
+                    - ✗ Rapid7 - No coverage
+                    - ✗ Vendor blogs - Silent
+                    
+                    </div>
+                    <div>
+                    
+                    **Yet we know:**
+                    - ✓ 9.9M malware infections
+                    - ✓ Active exploitation
+                    - ✓ Billions in losses
+                    - ✓ Only 5% monitoring
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box fragment">
+                    The absence of exposure data IS the story
+                    </div>
+                    
+                    <p class="fragment">Either exposure is incredibly rare... or this is a massive blind spot in security research</p>
+                </textarea>
+            </section>
+
+            <!-- ACT 2: TECHNICAL DEEP DIVE -->
+            <section data-markdown>
+                <textarea data-template>
+                    # Act 2
+                    ## Technical Deep Dive
+                    
+                    How the attack actually works
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Understanding the Attack Vector
+                    
+                    ```bash
+                    # The vulnerable configuration
+                    chrome.exe --remote-debugging-port=9222 \
+                               --remote-allow-origins=*
+                    ```
+                    
+                    **What this enables:**
+                    - HTTP API on `localhost:9222`
+                    - WebSocket connections to all tabs
+                    - Full CDP access
+                    - **ZERO authentication**
+                </textarea>
+            </section>
+
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## CDP's "Security Model"
+                    
+                    <div class="critical">Chrome DevTools Protocol has ZERO authentication by design</div>
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **What CDP Doesn't Have:**
+                    - ✗ No passwords/tokens
+                    - ✗ No API keys
+                    - ✗ No certificates
+                    - ✗ No rate limiting
+                    - ✗ No audit logging
+                    - ✗ No encryption (plaintext)
+                    
+                    </div>
+                    <div>
+                    
+                    **The "Security":**
+                    - ✓ Binds to `localhost` only*
+                    - ✓ OS-level protection*
+                    - ✓ User awareness*
+                    
+                    <p class="fragment" style="color: #ff6b6b; margin-top: 20px;">*All fail when attacker has local access</p>
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box fragment">
+                    Official Chrome docs: "The remote debugging protocol does not perform any authentication, so exposing it too widely can be a security risk."
+                    </div>
+                    
+                    <p class="fragment" style="font-size: 0.9em; margin-top: 20px;">This isn't a bug. This is an <strong>intentional design decision</strong> that prioritizes developer convenience over security.</p>
+                </textarea>
+            </section>
+
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## Network Exposure: The Attack Path
+                    
+                    **Default (Safe-ish):**
+                    ```bash
+                    chrome.exe --remote-debugging-port=9222
+                    # Binds to 127.0.0.1 only - localhost access
+                    ```
+                    
+                    <div class="fragment">
+                    
+                    **Exposed (Dangerous):**
+                    ```bash
+                    chrome.exe --remote-debugging-port=9222 \
+                               --remote-debugging-address=0.0.0.0
+                    # Binds to ALL interfaces - network accessible!
+                    ```
+                    
+                    </div>
+                    
+                    <div class="fragment">
+                    
+                    **Attacker Workaround (Port Forwarding):**
+                    
+                    <div style="font-size: 0.85em;">
+                    
+                    **Windows:**
+                    ```bash
+                    # Make localhost accessible remotely
+                    netsh interface portproxy add v4tov4 \
+                      listenaddress=0.0.0.0 listenport=9222 \
+                      connectaddress=127.0.0.1 connectport=9222
+                    ```
+                    
+                    **Linux:**
+                    ```bash
+                    # Using socat to forward port
+                    socat TCP-LISTEN:9222,fork,reuseaddr \
+                      TCP:127.0.0.1:9222
+                    
+                    # Or SSH tunnel for remote access
+                    ssh -L 9222:localhost:9222 user@victim-machine
+                    ```
+                    
+                    **macOS:**
+                    ```bash
+                    # Same as Linux - socat method
+                    socat TCP-LISTEN:9222,fork,reuseaddr \
+                      TCP:127.0.0.1:9222
+                    
+                    # Or using built-in SSH
+                    ssh -L 9222:localhost:9222 user@victim-machine
+                    ```
+                    
+                    </div>
+                    
+                    </div>
+                    
+                    <div class="success-box fragment">
+                    <strong>Chrome 136 (March 2025):</strong> Now requires `--user-data-dir` with non-default directory. Malware adapted in 45 days. 🏴‍☠️
+                    </div>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## WebSocket Communication Flow
+                    
+                    1. **Discovery:** Probe `http://localhost:9222/json`
+                    2. **Enumeration:** List all targets (tabs/pages)
+                    3. **Connection:** WebSocket to target's debugger URL
+                    4. **Exploitation:** Send CDP commands
+                    
+                    ```json
+                    {
+                      "id": 1,
+                      "method": "Network.getAllCookies",
+                      "params": {}
+                    }
+                    ```
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Key CDP Domains
+                    
+                    **Runtime** - Execute JavaScript
+                    ```javascript
+                    Runtime.evaluate({expression: "document.cookie"})
+                    ```
+                    
+                    **Network** - Extract cookies, intercept requests
+                    ```javascript
+                    Network.getAllCookies()
+                    ```
+                    
+                    **Page** - Screenshots, navigation
+                    ```javascript
+                    Page.captureScreenshot()
+                    ```
+                    
+                    **Storage** - localStorage, sessionStorage, IndexedDB
+                    ```javascript
+                    DOMStorage.getDOMStorageItems({
+                      storageId: {
+                        securityOrigin: "https://example.com",
+                        isLocalStorage: true
+                      }
+                    })
+                    ```
+                </textarea>
+            </section>
+
+            <!-- RED TEAM LIVE DEMO - MOVED HERE FROM EARLY POSITION -->
+            <section data-markdown class="red-team-section">
+                <textarea data-template>
+                    # 🔴 LIVE DEMO
+                    ## Red Team: The Attack
+                    
+                    **Watch session hijacking in real-time**
+                    
+                    <div class="terminal fragment">
+                    $ python chrome_hijack_basic.py
+                    </div>
+                </textarea>
+            </section>
+
+            <section data-markdown id="demo-results-slide">
+                <textarea data-template>
+                    ## What We Just Demonstrated
+                    
+                    <div id="demo-cookies" style="font-size: 1.2em; margin: 20px 0;">
+                    ✓ **Extracted 26+ cookies** - Session tokens, auth cookies
+                    </div>
+                    
+                    <div id="demo-screenshot" style="font-size: 1.2em; margin: 20px 0;">
+                    ✓ **Captured screenshot** - Visual surveillance
+                    </div>
+                    
+                    <div id="demo-storage" style="font-size: 1.2em; margin: 20px 0;">
+                    ✓ **Accessed localStorage** - API keys, JWT tokens
+                    </div>
+                    
+                    <div style="font-size: 1.2em; margin: 20px 0;">
+                    ✓ **Executed JavaScript** - Complete browser control
+                    </div>
+                    
+                    <div id="demo-cookie-list" style="font-size: 0.8em; margin-top: 15px; opacity: 0.8;">
+                    <!-- Cookie examples will appear here after loadDemoData() -->
+                    </div>
+                    
+                    <div class="warning-box">
+                    No password. No 2FA. Just pure session theft.
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- ACT 3: DEFENSE & DETECTION -->
+            <section data-markdown>
+                <textarea data-template>
+                    # Act 3
+                    ## Defense & Detection
+                    
+                    How blue teams can detect and prevent this
+                </textarea>
+            </section>
+
+            <section data-markdown class="blue-team-section">
+                <textarea data-template>
+                    # 🔵 LIVE DEMO
+                    ## Blue Team: Detection
+                    
+                    **Automated detection tool in action**
+                    
+                    <div class="terminal fragment">
+                    $ python chrome_debug_detector.py
+                    </div>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Detection Strategies
+                    
+                    **Host-Based:**
+                    - Process monitoring for `--remote-debugging-port`
+                    - File system: Debug profile directories
+                    - Registry/shortcut modifications
+                    
+                    **Network-Based:**
+                    - Port scanning for 9222-9225
+                    - WebSocket traffic analysis
+                    - CDP protocol signatures
+                    
+                    **Behavioral:**
+                    - Rapid cookie extraction patterns
+                    - Unusual browser automation
+                </textarea>
+            </section>
+
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## The Vendor Detection Gap
+                    
+                    <div class="critical">Only 5% of organizations actively monitor for this attack</div>
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **Vendor Coverage:**
+                    - ✓ **Elastic Security:** 2 rules (Dec 2020)
+                    - ✓ **SigmaHQ:** 1 rule (July 2022)
+                    - ✗ **Microsoft Defender:** No native detection
+                    - ✗ **CrowdStrike Falcon:** No native detection
+                    - ✗ **SentinelOne:** No native detection
+                    - ✗ **Carbon Black:** No native detection
+                    
+                    </div>
+                    <div>
+                    
+                    **The Reality:**
+                    - Major vendors COLLECT the telemetry
+                    - But they DON'T ALERT by default
+                    - Advanced tactics bypass 90% of traditional signature detection
+                    - Less than 5% organizational adoption
+                    - Most orgs flying completely blind
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box fragment">
+                    <strong>"Only Elastic provides native CDP detection rules. Every other major vendor collects the telemetry but doesn't alert. Less than 5% of organizations are monitoring."</strong>
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 15px; font-size: 0.9em;">
+                    This isn't a technology gap - it's an awareness gap. The tools exist. The telemetry exists. But organizations aren't using them.
+                    </div>
+                    
+                    <small style="opacity: 0.7;">Sources: Elastic Security, SigmaHQ, vendor research (Nov 2024)</small>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Sigma Detection Rule (Cross-Platform)
+                    
+                    ```yaml
+                    title: Chrome Remote Debugging Enabled
+                    status: experimental
+                    description: Detects Chrome with debugging flags
+                    references:
+                        - https://chromedevtools.github.io/devtools-protocol/
+                    logsource:
+                      category: process_creation
+                      product: windows  # Also: linux, macos
+                    detection:
+                      selection:
+                        CommandLine|contains:
+                          - '--remote-debugging-port'
+                          - '--debugging-port'
+                      condition: selection
+                    level: high
+                    tags:
+                      - attack.defense_evasion
+                      - attack.t1185
+                    ```
+                    
+                    <div class="success-box">
+                    Works with Splunk, ELK, QRadar, Sentinel - any SIEM<br>
+                    SigmaHQ Rule ID: b3d34dc5-2efd-4ae3-845f-8ec14921f449
+                    </div>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Process Detection Scripts
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **Windows (PowerShell):**
+                    ```powershell
+                    Get-Process chrome | ForEach-Object {
+                      $cmd = (Get-CimInstance Win32_Process `
+                        -Filter "ProcessId = $($_.Id)").CommandLine
+                      
+                      if ($cmd -match '--remote-debugging-port') {
+                        Write-Warning "Debug: PID $($_.Id)"
+                      }
+                    }
+                    ```
+                    
+                    </div>
+                    <div>
+                    
+                    **Linux/macOS (Bash):**
+                    ```bash
+                    ps aux | grep chrome | \
+                    grep -E 'remote-debugging-port' | \
+                    while read line; do
+                      echo "Debug detected: $line"
+                      # Send to SIEM
+                    done
+                    ```
+                    
+                    </div>
+                    </div>
+                    
+                    **Schedule with cron (Unix) or Task Scheduler (Windows)**
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Hardening: Chrome Enterprise Policies
+                    
+                    ```json
+                    {
+                      "RemoteDebuggingAllowed": false,
+                      "DeveloperToolsAvailability": 2,
+                      "CommandLineFlagSecurityWarningsEnabled": true
+                    }
+                    ```
+                    
+                    **Deploy via Group Policy:**
+                    - Blocks debugging features
+                    - Enforces security settings
+                    - Prevents flag modifications
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Network Security Measures
+                    
+                    **Firewall Rules (Common Ports):**
+                    ```bash
+                    # Block common debugging ports (9222-9225)
+                    iptables -A INPUT -p tcp --dport 9222:9225 -j DROP
+                    ```
+                    
+                    <div class="warning-box">
+                     Port can be changed! This is why process monitoring is critical - detect the flag, not just the port.
+                    </div>
+                    
+                    **Network Segmentation:**
+                    - Isolate developer environments
+                    - Restrict lateral movement
+                    - Monitor internal connections
+                    
+                    **Zero Trust:**
+                    - Authenticate all connections
+                    - Minimal privilege access
+                </textarea>
+            </section>
+
+            <!-- SNOWFLAKE BREACH CASE STUDY -->
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## Real Impact: The Snowflake Breach
+                    ### Why Detection Matters
+                    
+                    <div class="impact-stat" style="font-size: 2.5em;">165</div>
+                    
+                    Organizations compromised in the Snowflake breach (April 2024)
+                    
+                    <div class="two-column" style="margin-top: 30px;">
+                    <div>
+                    
+                    **High-Profile Victims:**
+                    - **AT&T:** 110 million customers
+                      - 6 months of call/text metadata
+                    - **Ticketmaster:** 590 million records
+                      - Customer data, payment info
+                    - **Santander:** 30 million customers
+                      - Government IDs, account data
+                    
+                    </div>
+                    <div>
+                    
+                    **Attack Timeline:**
+                    - **2020-2024:** Credentials stolen via infostealers
+                    - **April 14-25, 2024:** Active breach (11-day dwell)
+                    - **May 2024:** Public disclosure
+                    - **$2.7M:** Extortion demanded per Mandiant
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="critical fragment" style="margin-top: 25px; font-size: 1.3em;">
+                    Root Cause: 79.7% of victims lacked MFA
+                    </div>
+                    
+                    <div class="warning-box fragment" style="margin-top: 20px;">
+                    <strong>The Real Vulnerability:</strong><br>
+                    "Credentials were stolen between 2020-2024 via browser infostealers. They were NEVER ROTATED. The breach happened in 2024 with 4-year-old stolen credentials. The real vulnerability wasn't the technology - it was 4 years of credential rot."
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 20px; font-size: 0.9em;">
+                    <strong>What This Proves:</strong>
+                    <ul style="font-size: 0.95em;">
+                    <li>Browser credential theft has multi-year downstream impact</li>
+                    <li>MFA could have prevented this (but 79.7% didn't have it)</li>
+                    <li>Detection and hygiene matter more than perfect prevention</li>
+                    <li>Fortune 500 companies aren't immune</li>
+                    </ul>
+                    </div>
+                    
+                    <small style="opacity: 0.7; margin-top: 15px; display: block;">Source: Mandiant Incident Response Analysis (2024)</small>
+                </textarea>
+            </section>
+
+            <!-- ACT 4: BEYOND CHROME -->
+            <section data-markdown>
+                <textarea data-template>
+                    # Act 4
+                    ## Beyond Chrome
+                    
+                    Extended attack surface analysis
+                </textarea>
+            </section>
+
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## Electron Apps: Chromium + Node.js Powers
+                    
+                    <div class="success-box">Electron enables brilliant cross-platform desktop apps using web technologies - but inherits the same CDP architecture we've discussed</div>
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **Popular Electron Applications:**
+                    - **VS Code** (75.9% developer market share)
+                    - **Microsoft Teams** (93% of Fortune 100)
+                    - **Slack** (77% of Fortune 100)
+                    - **Discord** (200M+ users)
+                    - Notion, Figma, Obsidian, Signal...
+                    
+                    </div>
+                    <div>
+                    
+                    **Electron's Architecture:**
+                    ```bash
+                    # Electron = Chromium + Node.js
+                    electron-app \
+                      --inspect=9229 \
+                      --remote-debugging-port=9222
+                    ```
+                    
+                    <p style="font-size: 0.85em; margin-top: 15px;">Two debugging interfaces:<br>
+                    Port 9229 = Node.js (V8 inspector)<br>
+                    Port 9222 = Renderer (Chromium)</p>
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box fragment">
+                    <strong>Security Implication:</strong><br>
+                    Electron apps targeted via remote debugging gain the same CDP access we've demonstrated - plus Node.js capabilities including file system access, process spawning, and native OS permissions
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 20px; font-size: 0.9em;">
+                    <strong>Additional Attack Surface:</strong>
+                    <ul>
+                    <li>✓ Same CDP = same attacks work instantly</li>
+                    <li>✓ Node.js debugging = OS-level access (files, processes)</li>
+                    <li>✓ Developer tools = code repositories, secrets, credentials</li>
+                    <li>✓ Communication apps = corporate messages, files</li>
+                    </ul>
+                    </div>
+                    
+                    <small style="opacity: 0.7; margin-top: 15px; display: block;">Source: "Adventures into Electron code injection on MacOS" (Form3)</small>
+                </textarea>
+            </section>
+
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## Headless Chrome: The Invisible Threat
+                    
+                    <div class="critical">Stealth mode: Extract ALL data without showing the victim ANYTHING</div>
+                    
+                    **The Attack Scenario:**
+                    
+                    ```bash
+                    # Attacker spawns invisible Chrome with victim's profile
+                    chrome.exe \
+                      --headless \
+                      --user-data-dir="C:\Users\Victim\AppData\...\Chrome\" \
+                      --remote-debugging-port=9222 \
+                      https://gmail.com
+                    ```
+                    
+                    <div class="two-column fragment">
+                    <div>
+                    
+                    **What Happens:**
+                    1. No window appears (--headless)
+                    2. Loads victim's actual profile
+                    3. Authenticates as victim
+                    4. Debugging port opens silently
+                    5. Attacker extracts everything
+                    6. Process terminates - no trace
+                    
+                    </div>
+                    <div>
+                    
+                    **What Gets Stolen:**
+                    - ✓ All cookies (any site)
+                    - ✓ Session tokens
+                    - ✓ localStorage/sessionStorage
+                    - ✓ Saved passwords
+                    - ✓ Autofill data
+                    - ✓ Browsing history
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box fragment">
+                    <strong>Real Attack - PHEMEDRONE/LUMMA/STEALC:</strong><br>
+                    Malware spawns headless Chrome, uses victim's profile, extracts cookies via CDP, closes Chrome - all in under 5 seconds. Victim never sees a window. MFA bypassed completely.
+                    </div>
+                    
+                    <div class="fragment" style="margin-top: 20px; background: rgba(255,68,68,0.1); padding: 15px; border-left: 4px solid #ff4444;">
+                    <strong>🚨 Detection is CRITICAL:</strong><br>
+                    <code style="font-size: 0.85em;">chrome.exe --headless --remote-debugging-port</code> from non-Chrome parent = RED ALERT
+                    </div>
+                    
+                    <small style="opacity: 0.7; margin-top: 15px; display: block;">Source: SpecterOps "Hands in the Cookie Jar" (2023), mango.pdf.zone "Stealing Chrome cookies"</small>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Cryptocurrency Ecosystem
+                    
+                    **Targets:**
+                    - Browser-based wallets (MetaMask, Phantom)
+                    - DeFi applications
+                    - Crypto exchanges
+                    
+                    **Attack vectors:**
+                    - Seed phrase extraction
+                    - Transaction interception
+                    - Address swapping
+                    
+                    <p class="critical">High-value targets. Irreversible losses.</p>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## CI/CD Pipeline Risks
+                    
+                    **Common vulnerable configurations:**
+                    - Headless Chrome in Docker containers
+                    - Automated browser testing
+                    - Screenshot services
+                    - Web scraping infrastructure
+                    
+                    ```dockerfile
+                    # Vulnerable Dockerfile
+                    CMD ["chrome", "--remote-debugging-port=9222"]
+                    ```
+                </textarea>
+            </section>
+
+            <!-- CLOSING -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## Key Takeaways
+                    
+                    **For Red Teamers:**
+                    - New post-exploitation technique
+                    - Session hijacking without credentials
+                    - Bypasses 2FA completely
+                    
+                    **For Blue Teamers:**
+                    - Multiple detection opportunities
+                    - Preventive controls available
+                    - Implement monitoring TODAY
+                    
+                    **For Everyone:**
+                    - Defense in depth is critical
+                    - Assume breach, detect early
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Resources & Tools
+                    
+                    **GitHub Repository:**
+                    ```
+                    github.com/benibits/bugcon2025
+                    ```
+                    
+                    **Includes:**
+                    - ✓ Red team exploitation scripts
+                    - ✓ Blue team detection tools
+                    - ✓ Sigma rules and GPO templates
+                    - ✓ Purple team exercise guide
+                    - ✓ Complete documentation
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Immediate Actions
+                    
+                    **Right now:**
+                    1. Check your environment for exposed ports
+                    2. Deploy the detection script
+                    3. Review Chrome Enterprise policies
+                    
+                    **This week:**
+                    1. Implement Sigma rules in your SIEM
+                    2. Audit Docker containers and CI/CD
+                    3. Train developers on secure debugging
+                    
+                    **This month:**
+                    1. Run purple team exercises
+                    2. Update incident response playbooks
+                </textarea>
+            </section>
+
+            <!-- INFOSTEALER FAMILIES REFERENCE GLOSSARY -->
+            <section>
+                <h2>Infostealer Families Reference Guide</h2>
+                <h3 style="color: var(--hacker-green); font-size: 1.3em; margin-bottom: 30px;">Active Threat Families (Tier 1-2)</h3>
+                
+                <table style="width: 100%; font-size: 0.65em; border-collapse: collapse; margin: 20px 0;">
+                    <thead>
+                        <tr style="background-color: #1a1a1a; color: var(--hacker-green);">
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Family</th>
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Tier</th>
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Primary Technique</th>
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Status</th>
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Key Stat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background-color: rgba(255, 100, 100, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>LUMMA Stealer</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">1 (Highest)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Memory scanning via obfuscated patterns</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Active (Oct 2025)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">51% market share, 394K infections, 400+ customers</td>
+                        </tr>
+                        <tr style="background-color: rgba(255, 100, 100, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>STEALC</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">1 (Highest)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">ChromeKatz reimplementation, memory scanning</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Active</td>
+                            <td style="padding: 10px; border: 1px solid #333;">#2 market position, $400 pricing</td>
+                        </tr>
+                        <tr style="background-color: rgba(255, 100, 100, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>VIDAR</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">1 (Highest)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">ChromeKatz + polymorphic builder</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Active (v2.0 Oct 2025)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">$300 lifetime, 17% of cases (H2 2024)</td>
+                        </tr>
+                        <tr style="background-color: rgba(255, 200, 100, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>METASTEALER</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">2 (High)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">COM exploitation (CLSID abuse)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Active</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Requires elevation, backward compatible</td>
+                        </tr>
+                        <tr style="background-color: rgba(100, 150, 255, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>PHEMEDRONE</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">3 (Moderate)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">CDP WebSocket connection</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Active (open-source)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">First CDP bypass (Sept 12, 2024), fully detectable</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <p style="font-size: 0.7em; opacity: 0.7; margin-top: 20px;">
+                    <strong>Tier 1</strong> = Highest sophistication (red) | <strong>Tier 2</strong> = High sophistication (yellow) | <strong>Tier 3</strong> = Moderate (blue)<br>
+                    Status as of October 2025 | See <a href="https://github.com/benibits/bugcon2025" style="color: var(--hacker-green);">GitHub repository</a> for detailed analysis
+                </p>
+            </section>
+
+            <section>
+                <h2>Infostealer Families Reference Guide</h2>
+                <h3 style="color: var(--hacker-green); font-size: 1.3em; margin-bottom: 30px;">Advanced & Historical Families</h3>
+                
+                <table style="width: 100%; font-size: 0.65em; border-collapse: collapse; margin: 20px 0;">
+                    <thead>
+                        <tr style="background-color: #1a1a1a; color: var(--hacker-green);">
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Family</th>
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Tier</th>
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Primary Technique</th>
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Status</th>
+                            <th style="padding: 12px; text-align: left; border: 1px solid #333;">Key Stat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background-color: rgba(255, 200, 100, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>XENOSTEALER</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">2 (High)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Hybrid (COM + code injection)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Active (open-source)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Chrome 127+ support (Sept 26, 2024), more sophisticated COM</td>
+                        </tr>
+                        <tr style="background-color: rgba(100, 150, 255, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>FLESHSTEALER</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">3 (Moderate)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Traditional + crypto targeting</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Active (lightweight)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">70+ wallet targets, Chrome 131+, Windows + Firefox</td>
+                        </tr>
+                        <tr style="background-color: rgba(100, 150, 255, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>MYTH STEALER</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">3 (Moderate)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Rust-based, multi-browser</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Active (Dec 2024)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Newcomer, Discord webhooks, $300+/month MaaS</td>
+                        </tr>
+                        <tr style="background-color: rgba(150, 150, 150, 0.15);">
+                            <td style="padding: 10px; border: 1px solid #333;"><strong>REDLINE STEALER</strong></td>
+                            <td style="padding: 10px; border: 1px solid #333;">Historical</td>
+                            <td style="padding: 10px; border: 1px solid #333;">DPAPI-based (deprecated)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">Disrupted (Oct 28, 2024)</td>
+                            <td style="padding: 10px; border: 1px solid #333;">9.9M infections, 451M credentials, couldn't adapt to Chrome 127</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div style="margin-top: 25px; font-size: 0.75em; text-align: left; padding: 15px; background-color: rgba(0, 255, 65, 0.1); border-left: 4px solid var(--hacker-green);">
+                    <strong>Key Insight:</strong> REDLINE dominated 2020-2024 but couldn't adapt to Chrome 127's App-Bound Encryption. 
+                    Operation Magnus (Oct 2024) disrupted it, but LUMMA and STEALC immediately filled the gap. 
+                    The ecosystem is resilient - when one falls, others expand.
+                </div>
+                
+                <p style="font-size: 0.7em; opacity: 0.7; margin-top: 15px;">
+                    Status updated October 2025 | Complete source documentation in <a href="https://github.com/benibits/bugcon2025" style="color: var(--hacker-green);">GitHub repository</a>
+                </p>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    # Questions?
+                    
+                    **Contact:**
+                    - Email: benigtz.cybersec@gmail.com
+                    - GitHub: [github.com/benibits](https://github.com/benibits)
+                    
+                    <div class="success-box">
+                    Thank you! Stay secure. 🔒
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- SOURCES & REFERENCES -->
+            <section data-markdown>
+                <textarea data-template>
+                    ## Sources & References
+                    
+                    <div style="text-align: left; font-size: 0.75em;">
+                    
+                    **Malware Intelligence & Statistics:**
+                    - SpyCloud: LUMMA prevalence analysis (2024-2025)
+                    - CISA Advisory AA25-141B: LUMMA targeting (May 21, 2025)
+                    - Elastic Security Labs: "Katz and Mouse Game" (October 2024)
+                    - Cyble Research: Raccoon Stealer v2 analysis
+                    - Zscaler ThreatLabz: MetaStealer technical breakdown
+                    
+                    **Cryptocurrency & Financial Impact:**
+                    - Chainalysis: Crypto Crime Report 2024
+                    - SlowMist: Hacked Database (2024 incidents)
+                    - TRM Labs: Cryptocurrency theft tracking
+                    
+                    **Technical Documentation & CVEs:**
+                    - Chrome DevTools Protocol: chromedevtools.github.io
+                    - Chrome Developers Blog: Chrome 136 announcement (March 17, 2025)
+                    - Chromium Bug Portal: CVE-2018-6101, CVE-2022-2164
+                    - IMDEA Networks: "Chrowned by an Extension" (2023)
+                    
+                    **Detection & Defense:**
+                    - Elastic Security: Detection rules repository
+                    - SigmaHQ: Rule b3d34dc5-2efd-4ae3-845f-8ec14921f449
+                    - MITRE ATT&CK: T1185 (Browser Session Hijacking)
+                    
+                    </div>
+                    
+                    <div class="success-box" style="margin-top: 15px; font-size: 0.85em;">
+                    ✓ All statistics from verified primary sources<br>
+                    ✓ Complete reference list in GitHub repository<br>
+                    ✓ Research methodology: Advanced Research mode (10+ min)
+                    </div>
+                </textarea>
+            </section>
+
+            <!-- BACKUP SLIDES (Hidden unless needed) -->
+            <section data-markdown>
+                <textarea data-template>
+                    # Backup Slides
+                    ## Additional Technical Details
+                    
+                    (For extended Q&A)
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Full References & Sources
+                    
+                    <div style="text-align: left; font-size: 0.7em; columns: 2; column-gap: 40px;">
+                    
+                    **Security Organizations & Tools:**
+                    
+                    **Elastic Security Labs**  
+                    Provider of free detection rules and threat research  
+                    elastic.co/security-labs  
+                    Key Report: "Katz and Mouse Game" (Oct 2024)
+                    
+                    **SigmaHQ**  
+                    Open-source detection rule repository  
+                    github.com/SigmaHQ/sigma  
+                    Rule: b3d34dc5-2efd-4ae3-845f-8ec14921f449
+                    
+                    **CISA (Cybersecurity & Infrastructure Security Agency)**  
+                    US federal agency for cybersecurity  
+                    cisa.gov  
+                    Advisory: AA25-141B (LUMMA Stealer - May 21, 2025)
+                    
+                    **MITRE ATT&CK**  
+                    Knowledge base of adversary tactics  
+                    attack.mitre.org  
+                    Technique: T1185 (Browser Session Hijacking)
+                    
+                    ---
+                    
+                    **Threat Intelligence:**
+                    
+                    **SpyCloud**  
+                    Identity threat intelligence provider  
+                    spycloud.com  
+                    Data: Infostealer infection statistics
+                    
+                    **Chainalysis**  
+                    Blockchain data and cryptocurrency investigations  
+                    chainalysis.com  
+                    Report: Crypto Crime Report 2024
+                    
+                    **SlowMist**  
+                    Blockchain security firm  
+                    slowmist.com  
+                    Database: Cryptocurrency Hacked Database
+                    
+                    **TRM Labs**  
+                    Cryptocurrency compliance and risk management  
+                    trmlabs.com  
+                    Data: Crypto theft tracking
+                    
+                    ---
+                    
+                    **Technical Documentation:**
+                    
+                    **Chrome DevTools Protocol**  
+                    Official CDP documentation  
+                    chromedevtools.github.io/devtools-protocol
+                    
+                    **Chromium Bug Tracker**  
+                    Public bug reports and CVEs  
+                    bugs.chromium.org  
+                    CVEs: 2018-6101, 2022-2164
+                    
+                    **Electron Security**  
+                    Electron framework security guide  
+                    electronjs.org/docs/latest/tutorial/security
+                    
+                    ---
+                    
+                    **Research Papers:**
+                    
+                    **"Chrowned by an Extension"**  
+                    IMDEA Networks Institute (2023)  
+                    Browser extension security analysis
+                    
+                    **"Adventures into Electron Code Injection on macOS"**  
+                    Form3 Technical Blog  
+                    Electron debugging exploitation research
+                    
+                    ---
+                    
+                    **Additional Tools & Research:**
+                    
+                    **SpecterOps** - "Hands in the Cookie Jar" (2023)  
+                    **Red Canary** - Threat detection research  
+                    **Cyble Research** - Malware family analysis  
+                    **Zscaler ThreatLabz** - Stealer malware reports  
+                    
+                    </div>
+                    
+                    <div class="success-box" style="margin-top: 20px; font-size: 0.8em;">
+                    ✓ All data points verified through primary sources  
+                    ✓ Cross-referenced across multiple intelligence providers  
+                    ✓ Methodology documentation available in GitHub repository
+                    </div>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## CDP Command Reference
+                    
+                    **Most useful for attackers:**
+                    - `Network.getAllCookies()` - Cookie extraction
+                    - `Runtime.evaluate()` - JavaScript execution
+                    - `Page.captureScreenshot()` - Screenshots
+                    - `DOMStorage.getDOMStorageItems()` - localStorage
+                    - `Network.getCookies()` - Specific cookies
+                    - `Debugger.enable()` - Full debugging access
+                </textarea>
+            </section>
+
+            <section data-markdown class="dense-slide">
+                <textarea data-template>
+                    ## Q&A: Can Attackers Hide the Debug Process?
+                    
+                    **Question:** Can't attackers hide the Chrome process or command-line arguments from detection?
+                    
+                    **Short Answer:** Yes - which is why defense-in-depth is critical!
+                    
+                    <div class="two-column">
+                    <div>
+                    
+                    **Evasion Techniques:**
+                    
+                    1. **Process Injection**
+                        - Start Chrome normally
+                        - Inject debugging later via memory patching
+                        - No command-line flags visible
+                    
+                    2. **Rootkit-Level Hiding**
+                        - Kernel-mode hooks
+                        - Hide from ps/tasklist
+                        - Advanced persistent threats
+                    
+                    3. **Argument Obfuscation**
+                        - Environment variables
+                        - Config files instead of flags
+                        - Indirect debugging activation
+                    
+                    </div>
+                    <div>
+                    
+                    **Layered Detection:**
+                    
+                    ✓ **Network Monitoring**  
+                    Detect port 9222 traffic regardless of process visibility
+                    
+                    ✓ **File System Monitoring**  
+                    Chrome profile changes, DevToolsActivePort file
+                    
+                    ✓ **Behavioral Analysis**  
+                    Unusual Chrome memory patterns, WebSocket connections
+                    
+                    ✓ **EDR Telemetry**  
+                    Multiple data sources, not just process monitoring
+                    
+                    ✓ **Kernel-Level Hooks**  
+                    Below rootkit hiding capabilities
+                    
+                    </div>
+                    </div>
+                    
+                    <div class="warning-box">
+                    <strong>Key Insight:</strong> No single detection method is perfect. Process command-line monitoring catches 80-90% of attacks. Layering network + filesystem + behavioral detection approaches 95%+ coverage.
+                    </div>
+                </textarea>
+            </section>
+
+            <section data-markdown>
+                <textarea data-template>
+                    ## Mobile Platform Considerations
+                    
+                    **Android:**
+                    - Chrome Remote Debugging via USB
+                    - ADB bridge required
+                    - Different threat model
+                    
+                    **iOS:**
+                    - Safari Web Inspector
+                    - Similar capabilities
+                    - Requires physical access or pairing
+                </textarea>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- Reveal.js JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/markdown/markdown.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/highlight/highlight.js"></script>
+
+    <script>
+        Reveal.initialize({
+            hash: true,
+            width: 1280,
+            height: 720,
+            margin: 0.04,
+            
+            // Transition style
+            transition: 'slide',
+            
+            // Transition speed
+            transitionSpeed: 'default',
+            
+            // Background transition
+            backgroundTransition: 'fade',
+            
+            // Display controls
+            controls: true,
+            progress: true,
+            center: true,
+            
+            // Plugins
+            plugins: [ RevealMarkdown, RevealHighlight ]
+        });
+        
+        // Custom keyboard shortcuts
+        Reveal.addKeyBinding({keyCode: 66, key: 'B', description: 'Toggle blackout'}, () => {
+            document.body.style.backgroundColor = document.body.style.backgroundColor === 'black' ? '' : 'black';
+        });
+        
+        // ============================================================================
+        // LIVE DEMO DATA INTEGRATION
+        // ============================================================================
+        async function loadDemoData() {
+            try {
+                const response = await fetch('/demos/chrome-debugging-exploit/output/latest_exploitation_report.json');
+                const data = await response.json();
+                
+                const report = data.exploitation_report;
+                const cookies = report.extracted_data.cookies.details;
+                const localStorage = report.extracted_data.localStorage.items;
+                const stats = report.statistics;
+                
+                const cookieElement = document.getElementById('demo-cookies');
+                if (cookieElement && cookies) {
+                    cookieElement.textContent = `✓ **Extracted ${cookies.length} cookies** - Session tokens, auth cookies`;
+                    animateNumber(cookieElement, cookies.length);
+                }
+                
+                const storageElement = document.getElementById('demo-storage');
+                if (storageElement && localStorage) {
+                    const storageCount = Object.keys(localStorage).length;
+                    storageElement.textContent = `✓ **Accessed ${storageCount} localStorage items** - API keys, JWT tokens`;
+                }
+                
+                const screenshotElement = document.getElementById('demo-screenshot');
+                if (screenshotElement && report.extracted_data.screenshot) {
+                    screenshotElement.textContent = `✓ **Captured screenshot: ${report.extracted_data.screenshot.filename}** - Visual surveillance`;
+                }
+                
+                const cookieListElement = document.getElementById('demo-cookie-list');
+                if (cookieListElement && cookies) {
+                    const cookieNames = cookies.slice(0, 5).map(c => c.name).join(', ');
+                    cookieListElement.textContent = `Examples: ${cookieNames}...`;
+                }
+                
+                console.log('✅ Demo data loaded successfully!', report);
+                console.log(`📅 Timestamp: ${report.timestamp}`);
+                console.log(`🎯 Target: ${report.target.title}`);
+                console.log(`🍪 Cookies: ${stats.total_cookies}`);
+                return report;
+                
+            } catch (error) {
+                console.warn('⚠️ Demo data not available yet. Run the demo script first.', error);
+                return null;
+            }
+        }
+        
+        function animateNumber(element, target) {
+            let current = 0;
+            const increment = Math.ceil(target / 20);
+            const timer = setInterval(() => {
+                current += increment;
+                if (current >= target) {
+                    current = target;
+                    clearInterval(timer);
+                }
+                element.textContent = `✓ **Extracted ${current} cookies** - Session tokens, auth cookies`;
+            }, 50);
+        }
+        
+        Reveal.on('slidechanged', event => {
+            if (event.currentSlide && event.currentSlide.querySelector('#demo-results-slide')) {
+                loadDemoData();
+            }
+        });
+        
+        window.loadDemoData = loadDemoData;
+    </script>
+</body>
+</html>

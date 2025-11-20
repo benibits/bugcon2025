@@ -1,0 +1,58 @@
+# BugCon 2025 - Git Ignore File
+# Excludes presenter support files and generated outputs
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+
+# Presenter Support Files (personal use only)
+MARKDOWN_GUIDE.md
+DEMO_DAY_SCRIPT.md
+DUAL_DEMO_SCRIPT.md
+MASTER_SLIDE_ORDER.md
+DENSE_SLIDE_ANALYSIS_REPORT.md
+RESTRUCTURING_COMPLETE.md
+
+# Generated Outputs (demo artifacts)
+demos/*/output/*
+!demos/*/output/.gitkeep
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+
+# Chrome Debug Artifacts
+*chrome-debug/
+*.tmp
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS Files
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+
